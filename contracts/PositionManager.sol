@@ -8,12 +8,12 @@ contract PositionManager {
 
     struct PositionTimeData {
         uint256 notional_amount; // amount of notional with 1e6 precision
-        uint256 margin_amount; // amount of margin with 1e6 precision
         uint256 trading_time; // trading time
         uint256 swap_rate; // swap rate with 1e4 precision
     }
 
     struct PositionInfo {
+        uint256 margin_amount; // amount of margin with 1e6 precision
         address trader_address; // address of trader
         PositionTimeData[] data;
         bool is_fixed_rate_receiver; // true if trader is fixed rate receiver, false if trader is variable rate receiver
@@ -36,7 +36,7 @@ contract PositionManager {
 
     }
 
-    function LiquidatePosition() external PositionValid(position_id) {
+    function LiquidatePosition() external {
 
     }
 
@@ -47,7 +47,12 @@ contract PositionManager {
         uint256 trading_time,
         uint256 swap_rate
     ) external PositionValid(position_id) {
-
+        positions[position_id].data.push(
+            notional_amount,
+            margin_amount,
+            trading_time,
+            swap_rate
+        );
     }
 
 }
