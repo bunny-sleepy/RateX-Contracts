@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pragma solidity ^0.8.9;
-import "../compound/ICToken.sol";
+import "../Compound/ICToken.sol";
 import "./IRateOracle.sol";
 
 interface ICompoundRateOracle is IRateOracle {

@@ -3,7 +3,7 @@
 pragma solidity ^0.8.9;
 pragma abicoder v2;
 
-import "../../utils/AaveDataTypes.sol";
+import "../../Utils/AaveDataTypes.sol";
 import "../IERC20Minimal.sol";
 
 interface IAaveV2LendingPool {

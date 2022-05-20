@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pragma solidity ^0.8.9;
-import "../aave/IAaveV2LendingPool.sol";
+import "../Aave/IAaveV2LendingPool.sol";
 import "./IRateOracle.sol";
-import "../../utils/CustomErrors.sol";
+import "../../Utils/CustomErrors.sol";
 
 interface IAaveRateOracle is IRateOracle {
 
