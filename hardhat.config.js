@@ -19,10 +19,10 @@ module.exports = {
   networks: {
     hardhat: {
     },
-    oasisTestnet: {
-      // url: "https://testnet.emerald.oasis.dev/",
-      // accounts: [`0x${PRIVATE_KEY}`]
-    }
+    // oasisTestnet: {
+    //   // url: "https://testnet.emerald.oasis.dev/",
+    //   // accounts: [`0x${PRIVATE_KEY}`]
+    // }
   },
   solidity: {
     version: "0.8.9",
