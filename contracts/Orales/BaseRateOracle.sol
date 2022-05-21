@@ -3,7 +3,7 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../interface/oracle/IRateOracle.sol";
+import "../Interface/Oracle/IRateOracle.sol";
 
 abstract contract BaseRateOracle is IRateOracle, Ownable {
     uint256 public override minSeconds; // 3600==1h

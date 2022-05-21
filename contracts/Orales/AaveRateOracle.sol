@@ -3,8 +3,8 @@
 pragma solidity ^0.8.9;
 
 import "./BaseRateOracle.sol";
-import "../interface/aave/IAaveV2LendingPool.sol";
-import "../utils/WadRayMath.sol";
+import "../Interface/Aave/IAaveV2LendingPool.sol";
+import "../Utils/WadRayMath.sol";
 
 contract AaveRateOracle is BaseRateOracle {
     

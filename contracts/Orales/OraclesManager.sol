@@ -5,7 +5,7 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./AaveRateOracle.sol";
 import "./CompoundRateOracle.sol";
-import "../interface/oracle/IRateOracle.sol";
+import "../Interface/Oracle/IRateOracle.sol";
 
 contract OraclesManager is Ownable {
     uint public totalOracles = 0;

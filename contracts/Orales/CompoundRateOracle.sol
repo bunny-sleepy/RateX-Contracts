@@ -3,8 +3,8 @@
 pragma solidity ^0.8.9;
 
 import "./BaseRateOracle.sol";
-import "../interface/compound/ICToken.sol";
-import "../utils/WadRayMath.sol";
+import "../Interface/Compound/ICToken.sol";
+import "../Utils/WadRayMath.sol";
 
 contract CompoundRateOracle is BaseRateOracle {
     
