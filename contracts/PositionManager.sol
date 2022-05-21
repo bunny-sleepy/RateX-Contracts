@@ -30,16 +30,34 @@ contract PositionManager {
         _;
     }
 
-    function IncreaseMargin(uint position_id, uint256 margin_amount) external PositionValid(position_id) {
-
+    modifier OnlyPositionOwner(uint position_id) {
+        require(positions[position_id].trader_address == msg.sender, "Only Position Owner");
+        _;
     }
 
-    function DecreaseMargin(uint position_id, uint256 margin_amount) external PositionValid(position_id) {
+    function IncreaseMargin(uint position_id, uint256 margin_amount) external PositionValid(position_id) OnlyPositionOwner(position_id) {
+        uint256 old_amount = positions[position_id].margin_amount;
+        positions[position_id].margin_amount += margin_amount;
+        emit MarginUpdate(msg.sender, position_id, old_amount, positions[position_id].margin_amount);
+    }
 
+    function DecreaseMargin(uint position_id, uint256 margin_amount) external PositionValid(position_id) OnlyPositionOwner(position_id) {
+        require(positions[position_id].margin_amount >= margin_amount,"margin_amount is too big");
+        uint256 old_amount = positions[position_id].margin_amount;
+        positions[position_id].margin_amount -= margin_amount;
+        if(positions[position_id].margin_amount == 0) {
+            positions[position_id].is_liquidable = true;
+        }
+        emit MarginUpdate(msg.sender, position_id, old_amount, positions[position_id].margin_amount);
     }
 
     function LiquidatePosition() external {
-
+        for(uint i=0; i<num_positions; i++) {
+            if(position_valid[i] == true && positions[i].margin_amount == 0) {
+                positions[i].is_liquidable = true;
+                emit LiquidateUpdate(i);
+            }
+        }
     }
 
     function AddPosition(
@@ -82,4 +100,6 @@ contract PositionManager {
         positions[position_id].num_data += 1;
     }
 
+    event MarginUpdate(address user,uint position_id, uint256 old_amount, uint256 new_amount);
+    event LiquidateUpdate(uint position_id);
 }
