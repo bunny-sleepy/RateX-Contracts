@@ -47,11 +47,12 @@ contract PositionManager {
         uint256 trading_time,
         uint256 swap_rate
     ) external PositionValid(position_id) {
+        PositionTimeData memory positionTimeData;
+        positionTimeData.notional_amount = notional_amount;
+        positionTimeData.trading_time = trading_time;
+        positionTimeData.swap_rate = swap_rate;
         positions[position_id].data.push(
-            notional_amount,
-            margin_amount,
-            trading_time,
-            swap_rate
+            positionTimeData
         );
     }
 
