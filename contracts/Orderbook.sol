@@ -26,6 +26,9 @@ contract Orderbook is ERC20Helper {
         uint256 margin_amount; // margin amount left in this order
         uint256 position_id; 
         uint256 is_position; // false if the order does not have a corresponding position
+        // linked list elements
+        uint previous;
+        uint next;
     }
 
     struct OrderStep {
@@ -85,6 +88,7 @@ contract Orderbook is ERC20Helper {
 
         while (rate >= min_variable_rate) {
             uint256 num_orders = variable_orders[rate].num_orders;
+            bool flag = false;
 
             if (num_orders > 0) {
                 uint256 order_len = variable_orders[rate].orders.length;
@@ -97,11 +101,23 @@ contract Orderbook is ERC20Helper {
 
                     if (notional_amount_left <= order_notional_amount) {
                         position_swap_rate += order_notional_amount * rate;
+                        // TODO:
+                        if (notional_amount_left == order_notional_amount) {
+                            // TODO:
+                        }
+
+                        max_variable_rate = rate;
+                        flag = true;
+                        break;
                     } else {
+                        // TODO:
                         
                         notional_amount_left -= order_notional_amount;
                     }
                 }
+            }
+            if (flag) {
+                break;
             }
             rate -= 1;
         }
@@ -129,6 +145,23 @@ contract Orderbook is ERC20Helper {
         uint256 notional_amount
     ) external NotPaused RateValid(swap_rate) {
 
+    }
+
+    function UnlistLimitOrder(
+        uint256 swap_rate,
+        uint256 order_id,
+        bool is_fixed_receiver
+    ) external NotPaused RateValid(swap_rate) {
+        Order memory order;
+        if (is_fixed_receiver) {
+            order = fixed_orders[swap_rate].orders[order_id];
+        } else {
+            order = variable_orders[swap_rate].orders[order_id];
+        }
+        require(order.trader_address == msg.sender, "You are not trader");
+
+        
+        
     }
 
 }

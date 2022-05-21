@@ -15,13 +15,15 @@ contract PositionManager {
     struct PositionInfo {
         uint256 margin_amount; // amount of margin with 1e6 precision
         address trader_address; // address of trader
-        PositionTimeData[] data;
+        mapping(uint256 => PositionTimeData) data;
+        uint256 num_data;
         bool is_fixed_rate_receiver; // true if trader is fixed rate receiver, false if trader is variable rate receiver
         bool is_liquidable; // true if trader wants to liquidate this order, originally set to false
     }
 
-    PositionInfo[] positions;
+    mapping(uint256 => PositionInfo) positions;
     mapping(uint256 => bool) position_valid;
+    uint256 public num_positions;
 
     modifier PositionValid(uint position_id) {
         require(position_valid[position_id] == true, "Position invalid");
@@ -40,21 +42,44 @@ contract PositionManager {
 
     }
 
+    function AddPosition(
+        address trader_address,
+        uint256 notional_amount,
+        uint256 margin_amount,
+        uint256 swap_rate,
+        bool is_fixed_rate_receiver
+    ) external {
+        PositionTimeData memory data = PositionTimeData(
+            notional_amount,
+            block.timestamp,
+            swap_rate
+        );
+
+        positions[num_positions].margin_amount = margin_amount;
+        positions[num_positions].trader_address = trader_address;
+        positions[num_positions].is_fixed_rate_receiver = is_fixed_rate_receiver;
+        positions[num_positions].is_liquidable = false;
+        positions[num_positions].data[0] = data;
+        positions[num_positions].num_data = 1;
+
+        position_valid[num_positions] = true;
+        num_positions += 1;
+    }
+
     function AddPositionData(
         uint256 position_id,
         uint256 notional_amount,
         uint256 margin_amount,
-        uint256 trading_time,
         uint256 swap_rate
     ) external PositionValid(position_id) {
-        PositionTimeData memory positionTimeData;
-        positionTimeData.notional_amount = notional_amount;
-        positionTimeData.trading_time = trading_time;
-        positionTimeData.swap_rate = swap_rate;
-        positions[position_id].data.push(
-            positionTimeData
+        PositionTimeData memory data = PositionTimeData(
+            notional_amount,
+            block.timestamp,
+            swap_rate
         );
-        // TODO: ....
+        positions[position_id].data[positions[position_id].num_data] = data;
+        positions[position_id].margin_amount += margin_amount;
+        positions[position_id].num_data += 1;
     }
 
 }
