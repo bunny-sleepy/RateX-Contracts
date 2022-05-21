@@ -45,9 +45,6 @@ contract PositionManager {
         require(positions[position_id].margin_amount >= margin_amount,"margin_amount is too big");
         uint256 old_amount = positions[position_id].margin_amount;
         positions[position_id].margin_amount -= margin_amount;
-        if(positions[position_id].margin_amount == 0) {
-            positions[position_id].is_liquidable = true;
-        }
         emit MarginUpdate(msg.sender, position_id, old_amount, positions[position_id].margin_amount);
     }
 
