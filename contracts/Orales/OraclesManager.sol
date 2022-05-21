@@ -36,15 +36,28 @@ contract OraclesManager is Ownable {
         }
     }
 
+    function getRateFromTo(uint _oracleId, uint _from, uint _to) external view returns (uint) {
+        return IRateOracle(oracleMap[_oracleId]).getRateFromTo(_from, _to);
+    }
+
     // it is for Chainlink Keepers or users.
-    function UpdateAllOraclesRate(uint _fromIndex, uint _toIndex) external {
+    function updateAllOraclesRate() external {
+        if(totalOracles > 0) {
+            updateOraclesRate(0, totalOracles-1);
+        }
+    }
+
+    function updateOraclesRate(uint _fromIndex, uint _toIndex) public {
         require(_fromIndex<=_toIndex,"_fromIndex <= _toIndex");
-        for(uint i=_fromIndex; i<totalOracles; i++) {
+        for(uint i=_fromIndex; i<(_toIndex-_fromIndex +1); i++) {
             if(oracleMap[i] != address(0)) {
                 // TODO: Determine whether there is a corresponding pool now to save gas
                 // if(IPool().maxEndTime > block.timestamp){}
                 IRateOracle(oracleMap[i]).recordRate();
             }
         }
+        emit UpdateOraclesRate(block.timestamp, _fromIndex, _toIndex);
     }
+
+    event UpdateOraclesRate(uint _timestamp,uint _fromIndex, uint _toIndex);
 }

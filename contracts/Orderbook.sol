@@ -54,6 +54,15 @@ contract Orderbook is ERC20Helper {
         _;
     }
     
+    // uint public OrderAssetNum = 0;
+    // mapping(uint => IERC20) AssetMap;
+    // constructor (IERC20 _asset) {
+    //     require(address(_asset) != address(0), "Zero address detected");
+    //     AssetMap[OrderAssetNum] = _asset;
+    //     orderbook_paused = false;
+    //     min_rate = 0;
+    //     max_rate = 10000;
+    // }
     constructor (address _asset_address) {
         require(_asset_address != address(0), "Zero address detected");
         asset_address = _asset_address;
