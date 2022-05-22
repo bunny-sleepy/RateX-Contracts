@@ -63,7 +63,7 @@ contract PositionManager {
         uint256 margin_amount,
         uint256 swap_rate,
         bool is_fixed_rate_receiver
-    ) external {
+    ) external returns(uint256 position_id) {
         PositionTimeData memory data = PositionTimeData(
             notional_amount,
             block.timestamp,
@@ -78,6 +78,8 @@ contract PositionManager {
         positions[num_positions].num_data = 1;
 
         position_valid[num_positions] = true;
+        
+        position_id = num_positions;
         num_positions += 1;
     }
 
