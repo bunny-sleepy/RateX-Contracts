@@ -4,8 +4,11 @@ pragma solidity ^0.8.6;
 import "../Utils/IERC20.sol";
 import "../Utils/ERC20Helper.sol";
 import "../Interface/IPositionManager.sol";
+import "../PositionManager.sol";
+import "../InsuranceFund.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-abstract contract BasePool is ERC20Helper {
+contract BasePool is ERC20Helper, Ownable {
     uint256 public start_time;
     uint256 public end_time;
     // estimated lower / upper rates
@@ -15,8 +18,7 @@ abstract contract BasePool is ERC20Helper {
 
     address public oracle_address;
     address public position_manager_address;
-
-    address public underlying_asset;
+    address public insurance_fund_address;
 
     uint256 constant PRICE_PRECISION = 1e6;
     uint256 constant RATE_PRECISION = 1e4;
@@ -28,7 +30,7 @@ abstract contract BasePool is ERC20Helper {
 
     address public asset_address;
     uint8 asset_decimals;
-
+    // orderbook min / max rates
     uint256 public min_rate;
     uint256 public max_rate;
 
@@ -88,6 +90,55 @@ abstract contract BasePool is ERC20Helper {
         orderbook_paused = false;
         min_rate = 0;
         max_rate = 10000;
+        ratio_to_insurance_fund = 100;
+        ratio_to_owner = 100;
+
+        rate_lower = 5;
+        rate_upper = 2000;
+
+        start_time = block.timestamp;
+        end_time = start_time + 30 * 86400; // 30 days
+        PositionManager position_manager = new PositionManager(address(this));
+        InsuranceFund insurance_fund = new InsuranceFund();
+        position_manager_address = address(position_manager);
+        insurance_fund_address = address(insurance_fund);
+    }
+
+    function SetAsset(address _asset_address) external onlyOwner {
+        require(_asset_address != address(0), "Zero address detected");
+        asset_address = _asset_address;
+        asset_decimals = IERC20(asset_address).decimals();
+    }
+
+    function SetPositionManager(address _position_manager) external onlyOwner {
+        require(_position_manager != address(0), "Zero address detected");
+        position_manager_address = _position_manager;
+    }
+
+    function ToggleOrderbook() external onlyOwner {
+        orderbook_paused = !orderbook_paused;
+    }
+
+    // NOTE: for test use currently
+    function ResetOrders() external onlyOwner {
+        if (min_fixed_rate <= max_fixed_rate) {
+            for (uint i = min_fixed_rate; i <= max_fixed_rate; i++) {
+                if (fixed_orders[i].num_orders != 0) {
+                    delete fixed_orders[i];
+                }
+            }
+            min_fixed_rate = 1;
+            max_fixed_rate = 0;
+        }
+        if (min_variable_rate <= max_variable_rate) {
+            for (uint i = min_variable_rate; i <= max_variable_rate; i++) {
+                if (variable_orders[i].num_orders != 0) {
+                    delete variable_orders[i];
+                }
+            }
+            min_variable_rate = 1;
+            max_variable_rate = 0;
+        }
     }
 
     function UnlistLimitOrder(Order memory order, uint idx, bool is_fixed_receiver) internal {
@@ -144,7 +195,6 @@ abstract contract BasePool is ERC20Helper {
                 fixed_orders[rate].num_orders -= 1;
             }
         }
-        // TODO: transfer to position manager
     }
 
     function ReduceLimitOrder(Order memory order, uint idx, bool is_fixed_receiver, uint256 notional_to_reduce) internal {
@@ -262,7 +312,34 @@ abstract contract BasePool is ERC20Helper {
         }
     }
 
+    function TransferInMargin(uint256 margin_amount, address trader) internal { // margin_amount: 1e6 precision
+        uint256 transfer_amount = margin_amount * (10 ** asset_decimals) * (PRICE_PRECISION + ratio_to_insurance_fund + ratio_to_owner) / PRICE_PRECISION / PRICE_PRECISION;
+        TransferInToken(asset_address, trader, transfer_amount);
+        uint256 amount_to_pool = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
+        uint256 amount_to_insurance_fund = margin_amount * (10 ** asset_decimals) * ratio_to_insurance_fund / PRICE_PRECISION / PRICE_PRECISION;
+        uint256 amount_to_owner = transfer_amount - amount_to_pool - amount_to_insurance_fund;
+        TransferToken(asset_address, insurance_fund_address, amount_to_insurance_fund);
+        TransferToken(asset_address, owner(), amount_to_owner);
+    }
 
+    function IncreaseMargin(uint position_id, uint256 margin_amount) external {
+        TransferInMargin(margin_amount, msg.sender);
+        
+        uint256 old_amount;
+        uint256 new_amount;
+        (old_amount, new_amount) = IPositionManager(position_manager_address).IncreaseMargin(msg.sender, position_id, margin_amount);
+        emit MarginUpdate(msg.sender, position_id, old_amount, new_amount);
+    }
+
+    function DecreaseMargin(uint position_id, uint256 margin_amount) external {
+        uint256 transfer_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
+        uint256 old_amount;
+        uint256 new_amount;
+        (old_amount, new_amount) = IPositionManager(position_manager_address).DecreaseMargin(msg.sender, position_id, margin_amount);
+        TransferToken(asset_address, msg.sender, transfer_amount);
+        emit MarginUpdate(msg.sender, position_id, old_amount, new_amount);
+    }
+    
     function FixedMarketOrder(
         uint256 swap_rate, // the rate you would like to place an order if there is no open orders left
         uint256 margin_amount, // the amount of margin provided by trader in 1e6 precision
@@ -276,10 +353,7 @@ abstract contract BasePool is ERC20Helper {
         uint256 position_swap_rate = 0;
 
         // Transfer margin to contract
-        {
-            uint256 transfer_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
-            TransferInToken(asset_address, msg.sender, transfer_amount);
-        }
+        TransferInMargin(margin_amount, msg.sender);
 
         while (rate >= min_variable_rate) {
             uint256 num_orders = variable_orders[rate].num_orders;
@@ -361,7 +435,7 @@ abstract contract BasePool is ERC20Helper {
             emit FixedLimitOrderOpened(idx, msg.sender, new_order.notional_amount, new_order.margin_amount, new_order.swap_rate);
         }
 
-        // TODO: swap to position manager if some position is opened
+        // no need to swap to position manager if some position is opened
     }
 
     function VariableMarketOrder(
@@ -375,10 +449,7 @@ abstract contract BasePool is ERC20Helper {
         uint256 position_swap_rate = 0;
 
         // Transfer margin to orderbook
-        {
-            uint256 transfer_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
-            TransferInToken(asset_address, msg.sender, transfer_amount);
-        }
+        TransferInMargin(margin_amount, msg.sender);
 
         while (rate <= max_fixed_rate) {
             uint256 num_orders = fixed_orders[rate].num_orders;
@@ -460,7 +531,7 @@ abstract contract BasePool is ERC20Helper {
             emit VariableLimitOrderOpened(idx, msg.sender, new_order.notional_amount, new_order.margin_amount, new_order.swap_rate);
         }
 
-        // TODO: swap to position manager is some position is opened
+        // no need to swap to position manager if some position is opened
     }
 
     function FixedLimitOrder(
@@ -472,10 +543,8 @@ abstract contract BasePool is ERC20Helper {
             require(swap_rate > max_variable_rate, "Swap rate too low");
         }
         // Transfer margin to orderbook
-        {
-            uint256 transfer_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
-            TransferInToken(asset_address, msg.sender, transfer_amount);
-        }
+        TransferInMargin(margin_amount, msg.sender);
+        
         Order memory order;
         order.is_position = false;
         order.margin_amount = margin_amount;
@@ -495,10 +564,8 @@ abstract contract BasePool is ERC20Helper {
             require(swap_rate < min_fixed_rate, "Swap rate too high");
         }
         // Transfer margin to orderbook
-        {
-            uint256 transfer_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
-            TransferInToken(asset_address, msg.sender, transfer_amount);
-        }
+        TransferInMargin(margin_amount, msg.sender);
+        
         Order memory order;
         order.is_position = false;
         order.margin_amount = margin_amount;
@@ -532,11 +599,12 @@ abstract contract BasePool is ERC20Helper {
         }
         emit LimitOrderUnlisted(order_id, msg.sender, is_fixed_receiver, order.notional_amount, order.margin_amount, order.swap_rate);
     }
-
+    // Orderbook
     event FixedMarketOrderFilled(uint position_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
     event FixedLimitOrderOpened(uint order_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
     event VariableMarketOrderFilled(uint position_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
     event VariableLimitOrderOpened(uint order_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
     event LimitOrderUnlisted(uint order_id, address trader_address, bool is_fixed_receiver, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
-    
+    // PositionManager
+    event MarginUpdate(address user, uint position_id, uint256 old_amount, uint256 new_amount);
 }
