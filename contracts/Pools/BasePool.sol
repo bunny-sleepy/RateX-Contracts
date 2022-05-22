@@ -372,12 +372,22 @@ contract BasePool is ERC20Helper, Ownable {
                         if (notional_amount_left == order.notional_amount) {
                             // Unlist the limit order
                             UnlistLimitOrder(order, idx, false);
+                            if (i + 1 == num_orders) {
+                                if (rate == min_variable_rate) {
+                                    min_variable_rate = 1;
+                                    max_variable_rate = 0;
+                                } else {
+                                    max_variable_rate = rate - 1;
+                                }
+                            } else {
+                                max_variable_rate = rate;
+                            }
                         } else {
                             // Reduce limit order
                             ReduceLimitOrder(order, idx, false, notional_amount_left);
+                            max_variable_rate = rate;
                         }
 
-                        max_variable_rate = rate;
                         notional_amount_left = 0;
                         flag = true;
                         break;
@@ -386,7 +396,13 @@ contract BasePool is ERC20Helper, Ownable {
                         notional_amount_left -= order.notional_amount;
                         // unlist the limit order
                         UnlistLimitOrder(order, idx, false);
-                        if (i + 1 == num_orders) break;
+                        if (i + 1 == num_orders) {
+                            if (rate == min_variable_rate) {
+                                min_variable_rate = 1;
+                                max_variable_rate = 0;
+                            }
+                            break;
+                        }
                     }
                     idx = variable_orders[rate].order_nodes[idx].next;
                 }
@@ -443,7 +459,9 @@ contract BasePool is ERC20Helper, Ownable {
         uint256 margin_amount,
         uint256 notional_amount
     ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) {
-        require(swap_rate < min_fixed_rate, "Swap rate too low");
+        if (max_variable_rate > min_variable_rate) {
+            require(swap_rate < min_fixed_rate, "Swap rate too low");
+        }
         uint256 rate = min_fixed_rate;
         uint256 notional_amount_left = notional_amount;
         uint256 position_swap_rate = 0;
@@ -468,12 +486,22 @@ contract BasePool is ERC20Helper, Ownable {
                         if (notional_amount_left == order.notional_amount) {
                             // Unlist the limit order
                             UnlistLimitOrder(order, idx, true);
+                            if (i + 1 == num_orders) {
+                                if (rate == min_fixed_rate) {
+                                    min_fixed_rate = 1;
+                                    max_fixed_rate = 0;
+                                } else {
+                                    max_fixed_rate = rate + 1;
+                                }
+                            } else {
+                                max_fixed_rate = rate;
+                            }
                         } else {
                             // Reduce limit order
                             ReduceLimitOrder(order, idx, true, notional_amount_left);
+                            min_fixed_rate = rate;
                         }
 
-                        min_fixed_rate = rate;
                         notional_amount_left = 0;
                         flag = true;
                         break;
@@ -482,7 +510,13 @@ contract BasePool is ERC20Helper, Ownable {
                         notional_amount_left -= order.notional_amount;
                         // unlist the limit order
                         UnlistLimitOrder(order, idx, true);
-                        if (i + 1 == num_orders) break;
+                        if (i + 1 == num_orders) {
+                            if (rate == min_fixed_rate) {
+                                min_fixed_rate = 1;
+                                max_fixed_rate = 0;
+                            }
+                            break;
+                        }
                     }
                     idx = fixed_orders[rate].order_nodes[idx].next;
                 }
