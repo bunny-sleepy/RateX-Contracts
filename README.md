@@ -2,7 +2,7 @@
 
 ## Introduction
 
-RateX is a decentralized interest rate swap (IRS) product that offers synthetic exposure to interest rates. The RateX protocol supports up to 100x leverage trading, and the trades will have expiry.
+RateX is a decentralized interest rate swap (IRS) product that offers synthetic exposure to interest rates. The RateX protocol supports up to 40x leverage trading, and the trades will have expiry.
 
 Note: synthetic means you need only provide margin to trade.
 
@@ -117,9 +117,9 @@ Example setting for aUSDC supply rate:
 r_l = 0.5%
 r_u = 20%
 T_e = 30 (days)
-leverage_max = 100x (on genesis)
+leverage_max = 40x (on genesis)
 
-Suggestion: leverage be <= 50x if you do not check your margin ratio often.
+Suggestion: leverage be <= 20x if you do not check your margin ratio often.
 ```
 
 ## Contract Modules
