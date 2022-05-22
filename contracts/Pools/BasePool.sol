@@ -59,12 +59,12 @@ contract BasePool is ERC20Helper, Ownable {
     }
 
     mapping(uint256 => OrderStep) fixed_orders; // receive fixed rates, sellers
-    uint256 min_fixed_rate = 1;
-    uint256 max_fixed_rate = 0; // set to indicate that no order exist on genesis
+    uint256 public min_fixed_rate = 1;
+    uint256 public max_fixed_rate = 0; // set to indicate that no order exist on genesis
 
     mapping(uint256 => OrderStep) variable_orders; // receive variable rates, buyers
-    uint256 min_variable_rate = 1;
-    uint256 max_variable_rate = 0; // set to indicate that no order exist on genesis
+    uint256 public min_variable_rate = 1;
+    uint256 public max_variable_rate = 0; // set to indicate that no order exist on genesis
 
     modifier NotPaused() {
         require(orderbook_paused == false, "Orderbook paused");
@@ -78,7 +78,7 @@ contract BasePool is ERC20Helper, Ownable {
 
     modifier OrderValid(uint256 margin_amount, uint256 notional_amount) {
         uint256 left = (end_time - start_time) * (rate_upper - rate_lower) * reserve_factor * notional_amount;
-        uint256 right = margin_amount * 365 * RATE_PRECISION * PRICE_PRECISION;
+        uint256 right = margin_amount * 365 * 86400 * RATE_PRECISION * PRICE_PRECISION;
         require(left <= right, "Order not valid");
         _;
     }
@@ -538,7 +538,7 @@ contract BasePool is ERC20Helper, Ownable {
         uint256 swap_rate,
         uint256 margin_amount,
         uint256 notional_amount
-    ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) {
+    ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) returns (uint256) {
         if (max_variable_rate > min_variable_rate) {
             require(swap_rate > max_variable_rate, "Swap rate too low");
         }
@@ -553,13 +553,14 @@ contract BasePool is ERC20Helper, Ownable {
         order.trader_address = msg.sender;
         uint idx = ListFixedLimitOrder(order);
         emit FixedLimitOrderOpened(idx, msg.sender, order.notional_amount, order.margin_amount, order.swap_rate);
+        return idx;
     }
 
     function VariableLimitOrder(
         uint256 swap_rate,
         uint256 margin_amount,
         uint256 notional_amount
-    ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) {
+    ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) returns (uint256) {
         if (max_fixed_rate > min_fixed_rate) {
             require(swap_rate < min_fixed_rate, "Swap rate too high");
         }
@@ -574,6 +575,7 @@ contract BasePool is ERC20Helper, Ownable {
         order.trader_address = msg.sender;
         uint idx = ListVariableLimitOrder(order);
         emit VariableLimitOrderOpened(idx, msg.sender, order.notional_amount, order.margin_amount, order.swap_rate);
+        return idx;
     }
 
     function UserUnlistLimitOrder(

@@ -25,6 +25,10 @@ async function main() {
     console.log("Pool address: ", pool.address);
     console.log("PositionManager address: ", position_manager.address);
     console.log("InsufanceFund address: ", insurance_fund.address);
+    console.log("USDC address: ", USDC.address);
+    
+    // TEST ONLY
+    await USDC.approve(pool.address, parseUnits("1", 25));
 }
 
 // We recommend this pattern to be able to use async/await everywhere
