@@ -7,6 +7,7 @@ import "./AaveRateOracle.sol";
 import "./CompoundRateOracle.sol";
 import "./YearnRateOracle.sol";
 import "../Interface/IRateOracle.sol";
+import "../Mock/MockOracle.sol";
 
 contract OraclesManager is Ownable {
     uint public totalOracles = 0;
@@ -42,6 +43,15 @@ contract OraclesManager is Ownable {
         if(oracleTypeMap[3][address(asset)] == address(0)) {
             oracleTypeMap[3][address(asset)] = address(new YearnRateOracle(yVaultAddress, asset));
                 oracleMap[totalOracles] = oracleTypeMap[3][address(asset)];
+                totalOracles = totalOracles + 1;
+        }
+    }
+
+    // TODO：modifier onlyPool()
+    function createMockOracle(IERC20Minimal asset) public {
+        if(oracleTypeMap[4][address(asset)] == address(0)) {
+            oracleTypeMap[4][address(asset)] = address(new MockOracle(asset,3600));
+                oracleMap[totalOracles] = oracleTypeMap[4][address(asset)];
                 totalOracles = totalOracles + 1;
         }
     }
