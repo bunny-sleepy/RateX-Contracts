@@ -6,11 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./AaveRateOracle.sol";
 import "./CompoundRateOracle.sol";
 import "./YearnRateOracle.sol";
-import "../Interface/Oracle/IRateOracle.sol";
+import "../Interface/IRateOracle.sol";
 
 contract OraclesManager is Ownable {
     uint public totalOracles = 0;
-    mapping(uint=>mapping(address=>address)) oracleTypeMap; // oracleType =>(asset address => orale address)
+    mapping(uint=>mapping(address=>address)) oracleTypeMap; // oracleType =>(asset address => oracle address)
     mapping(uint=>address) oracleMap; // index => oracle address
 
     address public aaveAddress;

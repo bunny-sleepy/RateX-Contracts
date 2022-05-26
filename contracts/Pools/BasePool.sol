@@ -322,6 +322,12 @@ contract BasePool is ERC20Helper, Ownable {
         TransferToken(asset_address, owner(), amount_to_owner);
     }
 
+    function TransferAsset(address trader_address, uint256 margin_amount) external { // 1e6 precision
+        require(msg.sender == position_manager_address, "You are not position manager");
+        margin_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
+        TransferToken(asset_address, trader_address, margin_amount);
+    }
+
     function IncreaseMargin(uint position_id, uint256 margin_amount) external {
         TransferInMargin(margin_amount, msg.sender);
         
@@ -338,6 +344,10 @@ contract BasePool is ERC20Helper, Ownable {
         (old_amount, new_amount) = IPositionManager(position_manager_address).DecreaseMargin(msg.sender, position_id, margin_amount);
         TransferToken(asset_address, msg.sender, transfer_amount);
         emit MarginUpdate(msg.sender, position_id, old_amount, new_amount);
+    }
+
+    function ClosePosition(uint position_id) external { // set position able to be closed, but not closed immedietly
+        IPositionManager(position_manager_address).ClosePosition(msg.sender, position_id);
     }
     
     function FixedMarketOrder(

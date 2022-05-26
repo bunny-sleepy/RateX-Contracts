@@ -13,9 +13,9 @@ contract LiquidatorKeeper is KeeperCompatibleInterface {
     PositionManager public positionManager;
 
     constructor(uint updateInterval, address _positionManagerAddress) {
-      interval = updateInterval;
-      lastTimeStamp = block.timestamp;
-      positionManager = PositionManager(_positionManagerAddress);
+        interval = updateInterval;
+        lastTimeStamp = block.timestamp;
+        positionManager = PositionManager(_positionManagerAddress);
     }
 
     function checkUpkeep(bytes calldata /* checkData */) external view override returns (bool upkeepNeeded, bytes memory /* performData */) {
@@ -27,7 +27,7 @@ contract LiquidatorKeeper is KeeperCompatibleInterface {
         if ((block.timestamp - lastTimeStamp) > interval ) {
             lastTimeStamp = block.timestamp;
             // Liquidate Position
-            positionManager.LiquidatePosition();
+            positionManager.LiquidateAllPosition();
         }
     }
 }

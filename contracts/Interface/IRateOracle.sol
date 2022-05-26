@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.9;
 
-import "../IERC20Minimal.sol";
+import "./IERC20Minimal.sol";
 
 interface IRateOracle {
     event RecordRate(uint _timestamp, uint _rate);

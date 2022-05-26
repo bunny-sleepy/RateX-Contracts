@@ -3,7 +3,7 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "../Interface/Oracle/IRateOracle.sol";
+import "../Interface/IRateOracle.sol";
 
 abstract contract BaseRateOracle is IRateOracle, Ownable {
     uint256 public override minSeconds; // 3600==1h
@@ -13,6 +13,8 @@ abstract contract BaseRateOracle is IRateOracle, Ownable {
     uint public startTimestamp = 0;
     uint public lastUpdateTimestamp = 0;
     mapping(uint => uint) timeMap; // timestamp => recordStruct
+
+    uint256 constant RATE_PRECISION = 1e4;
 
     constructor(IERC20Minimal _underlying, uint256 _minSeconds) {
         require(address(_underlying) != address(0), "underlying must exist");

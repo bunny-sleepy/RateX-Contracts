@@ -4,7 +4,7 @@ pragma solidity ^0.8.7;
 // KeeperCompatible.sol imports the functions from both ./KeeperBase.sol and
 // ./interfaces/KeeperCompatibleInterface.sol
 import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
-import "../Orales/OraclesManager.sol";
+import "../Oracles/OraclesManager.sol";
 
 contract OracleKeeper is KeeperCompatibleInterface {
     uint public immutable interval;
@@ -13,7 +13,7 @@ contract OracleKeeper is KeeperCompatibleInterface {
     OraclesManager public oraclesManager;
 
     constructor(uint updateInterval,address _aaveAddress, address _compoundAddress) {
-      interval = updateInterval;
+      interval = updateInterval; // set to 3600
       lastTimeStamp = block.timestamp;
       oraclesManager = new OraclesManager(_aaveAddress, _compoundAddress);
     }

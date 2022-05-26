@@ -2,6 +2,7 @@
 pragma solidity ^0.8.6;
 
 import "./Interface/IPool.sol";
+import "./Interface/IRateOracle.sol";
 
 contract PositionManager {
 
@@ -65,24 +66,84 @@ contract PositionManager {
         swap_rate = positions[position_id].data[data_id].swap_rate;
     }
 
-    // returns 1e6 view
-    function GetPositionHealthFactor(uint position_id) external view PositionValid(position_id) returns (uint256 factor) {
-        uint256 margin_amount = positions[position_id].margin_amount;
-        uint num_data = positions[position_id].num_data;
-        uint256 notional_amount = 0;
-        uint256 time = block.timestamp;
+    function CalculatePnL(bool is_fixed_receiver, uint256 notional_amount, uint256 rate) internal view returns (int256 PnL) {
         IPool pool = IPool(pool_address);
-        require(time < pool.end_time(), "Time unavailable");
-        for (uint i = 0; i < num_data; i++) {
-            notional_amount += positions[position_id].data[i].notional_amount;
+        uint256 time = block.timestamp;
+        if (time > pool.end_time()) {
+            time = pool.end_time();
         }
+        uint256 avg_rate = IRateOracle(pool.oracle_address()).getRateFromTo(pool.start_time(), time);
+        if (is_fixed_receiver) {
+            PnL = (int256(rate) - int256(avg_rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+        } else {
+            PnL = (int256(avg_rate) - int256(rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+        }
+    }
+
+    function CalculateNotionalAndRate(uint position_id) internal view returns (uint256, uint256) {
+        uint256 notional_amount = 0;
+        uint256 rate = 0;
+        uint num_data = positions[position_id].num_data;
+        for (uint i = 0; i < num_data; i++) {
+            uint256 data_notional = positions[position_id].data[i].notional_amount;
+            notional_amount += data_notional;
+            rate += positions[position_id].data[i].swap_rate * data_notional;
+        }
+        if (notional_amount == 0) {
+            rate = 0;
+        } else {
+            rate = rate / notional_amount;
+        }
+        return (notional_amount, rate);
+    }
+
+    // returns 1e6 view
+    // if less than PRICE_PRECISION, it is not healthy
+    function GetPositionHealthFactor(uint position_id) public view PositionValid(position_id) returns (uint256 factor) {
+        uint256 margin_amount = positions[position_id].margin_amount;
+        uint256 notional_amount = 0;
+        uint256 rate = 0;
+        IPool pool = IPool(pool_address);
+        require((block.timestamp < pool.end_time()) && (block.timestamp > pool.start_time()), "Time unavailable");
+        (notional_amount, rate) = CalculateNotionalAndRate(position_id);
+        // calculate PnL
+        int256 PnL = 0;
+        
+        if (rate > 0) {
+            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+        }
+
+        // margin_amount update
+        if (PnL + int256(margin_amount) >= int256(0)) {
+            margin_amount = uint256(PnL + int256(margin_amount));
+        } else {
+            margin_amount = 0;
+        }
+
         if (notional_amount == 0) {
             factor = 0;
         } else {
-            uint256 time_diff = pool.end_time() - time;
+            uint256 time_diff = pool.end_time() - block.timestamp;
             uint256 rate_diff = pool.rate_upper() - pool.rate_lower();
             factor = margin_amount * (365 * 86400) * RATE_PRECISION * PRICE_PRECISION / time_diff / notional_amount / rate_diff;
         }
+    }
+
+    function ExistLiquidablePosition() external view returns (bool) {
+        bool flag = false;
+        for (uint i = 0; i < num_positions; i++) {
+            if (position_valid[i] == true) {
+                if (positions[i].is_liquidable || (GetPositionHealthFactor(i) < PRICE_PRECISION)) {
+                    flag = true;
+                    break;
+                }
+            }
+        }
+        return flag;
+    }
+
+    function ClosePosition(address trader_address, uint256 position_id) external {
+        positions[position_id].is_liquidable = true;
     }
 
     function IncreaseMargin(address trader_address, uint position_id, uint256 margin_amount) external OnlyPool PositionValid(position_id) OnlyPositionOwner(trader_address, position_id) returns (uint256 old_amount, uint256 new_amount) {
@@ -100,13 +161,95 @@ contract PositionManager {
         emit MarginUpdate(trader_address, position_id, old_amount, new_amount);
     }
 
-    function LiquidatePosition() external {
+
+    function LiquidatePosition(address liquidator, uint256 position_id) internal PositionValid(position_id) {
+        // liquidate
+        if (positions[position_id].trader_address == liquidator) return; // return if already liquidated
+        // TODO: increase margin amount
+        IPool pool = IPool(pool_address);
+
+        uint256 margin_amount = positions[position_id].margin_amount;
+        uint256 notional_amount = 0;
+        uint256 rate = 0;
+        (notional_amount, rate) = CalculateNotionalAndRate(position_id);
+
+        // calculate PnL
+        int256 PnL = 0;
+        if (rate > 0) {
+            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+        }
+        
+        uint256 time_diff = pool.end_time() - block.timestamp;
+        uint256 rate_diff = 0;
+        if (positions[position_id].is_fixed_receiver) {
+            if (rate == 0) {
+                rate_diff = pool.rate_upper() - pool.rate_lower();
+            } else {
+                rate_diff = pool.rate_upper() - rate;
+            }
+        } else {
+            if (rate == 0) {
+                rate_diff = pool.rate_upper() - pool.rate_lower();
+            } else {
+                rate_diff = rate - pool.rate_lower();
+            }   
+        }
+
+        // margin to liquidator
+        uint256 margin_to_go = notional_amount * time_diff * rate_diff / (365 * 86400) / RATE_PRECISION;
+        if (-PnL + int256(margin_to_go) >= int256(0)) {
+            margin_to_go = uint256(-PnL + int256(margin_to_go));
+        } else {
+            margin_to_go = 0;
+        }
+        
+        if (margin_to_go > margin_amount) {
+            margin_to_go = margin_amount;
+        }
+        // margin to liquidator
+        pool.TransferAsset(liquidator, margin_to_go);
+        // margin to trader
+        pool.TransferAsset(positions[position_id].trader_address, margin_amount - margin_to_go);
+
+        // transfer position
+        positions[position_id].trader_address = liquidator;
+    }
+
+    function LiquidateAllPosition() external {
         for (uint i = 0; i < num_positions; i++) {
-            if (position_valid[i] == true && positions[i].margin_amount == 0) {
-                positions[i].is_liquidable = true;
-                emit LiquidateUpdate(i);
+            if (position_valid[i] == true) {
+                if (positions[i].is_liquidable || (GetPositionHealthFactor(i) < PRICE_PRECISION)) {
+                    LiquidatePosition(msg.sender, i);
+                    emit LiquidateUpdate(i);
+                }
             }
         }
+    }
+
+    function RedeemMargin(uint position_id) external OnlyPool PositionValid(position_id) returns (uint256 margin_amount) {
+        // TODO: enable users to redeem margin after pool has expired
+        IPool pool = IPool(pool_address);
+        require(block.timestamp >= pool.end_time(), "Pool not ended");
+        margin_amount = positions[position_id].margin_amount;
+        uint256 notional_amount;
+        uint256 rate;
+        (notional_amount, rate) = CalculateNotionalAndRate(position_id);
+
+        int256 PnL = 0;
+        if (rate > 0) {
+            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+        }
+
+        // margin_amount update
+        if (PnL + int256(margin_amount) >= int256(0)) {
+            margin_amount = uint256(PnL + int256(margin_amount));
+        } else {
+            margin_amount = 0;
+        }
+        pool.TransferAsset(positions[position_id].trader_address, margin_amount);
+
+        // remove position after redeem
+        delete positions[position_id];
     }
 
     function AddPosition(
