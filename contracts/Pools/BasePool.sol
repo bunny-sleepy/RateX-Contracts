@@ -82,11 +82,20 @@ contract BasePool is ERC20Helper, Ownable {
         require(left <= right, "Order not valid");
         _;
     }
-    
-    constructor (address _asset_address) {
-        require(_asset_address != address(0), "Zero address detected");
+
+    modifier onlyPositionManager() {
+        require(msg.sender == position_manager_address, "You are not position manager");
+        _;
+    }
+
+    constructor (
+        address _asset_address,
+        address _oracle_address
+    ) {
+        require((_asset_address != address(0)) && (_oracle_address != address(0)), "Zero address detected");
         asset_address = _asset_address;
         asset_decimals = IERC20(asset_address).decimals();
+        oracle_address = _oracle_address;
         orderbook_paused = false;
         min_rate = 0;
         max_rate = 10000;
@@ -99,7 +108,7 @@ contract BasePool is ERC20Helper, Ownable {
         start_time = block.timestamp;
         end_time = start_time + 30 * 86400; // 30 days
         PositionManager position_manager = new PositionManager(address(this));
-        InsuranceFund insurance_fund = new InsuranceFund();
+        InsuranceFund insurance_fund = new InsuranceFund(address(position_manager));
         position_manager_address = address(position_manager);
         insurance_fund_address = address(insurance_fund);
     }
@@ -322,10 +331,15 @@ contract BasePool is ERC20Helper, Ownable {
         TransferToken(asset_address, owner(), amount_to_owner);
     }
 
-    function TransferAsset(address trader_address, uint256 margin_amount) external { // 1e6 precision
-        require(msg.sender == position_manager_address, "You are not position manager");
+    // Transfer asset to liquidated trader
+    function TransferAsset(address trader_address, uint256 margin_amount) external onlyPositionManager { // 1e6 precision
         margin_amount = margin_amount * (10 ** asset_decimals) / PRICE_PRECISION;
         TransferToken(asset_address, trader_address, margin_amount);
+    }
+
+    // Transfer margin bonus to liquidator
+    function TransferMarginBonus(uint256 notional_amount) external onlyPositionManager returns (uint256 bonus) {
+        bonus = IInsuranceFund(insurance_fund_address).TransferLiquidationBonus(notional_amount);
     }
 
     function IncreaseMargin(uint position_id, uint256 margin_amount) external {
@@ -344,6 +358,10 @@ contract BasePool is ERC20Helper, Ownable {
         (old_amount, new_amount) = IPositionManager(position_manager_address).DecreaseMargin(msg.sender, position_id, margin_amount);
         TransferToken(asset_address, msg.sender, transfer_amount);
         emit MarginUpdate(msg.sender, position_id, old_amount, new_amount);
+    }
+
+    function RedeemMargin(uint position_id) external {
+        uint256 margin_amount = IPositionManager(position_manager_address).RedeemMargin(position_id);
     }
 
     function ClosePosition(uint position_id) external { // set position able to be closed, but not closed immedietly

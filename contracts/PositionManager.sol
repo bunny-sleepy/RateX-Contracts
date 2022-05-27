@@ -3,6 +3,7 @@ pragma solidity ^0.8.6;
 
 import "./Interface/IPool.sol";
 import "./Interface/IRateOracle.sol";
+import "./Interface/IInsuranceFund.sol";
 
 contract PositionManager {
 
@@ -80,7 +81,7 @@ contract PositionManager {
         }
     }
 
-    function CalculateNotionalAndRate(uint position_id) internal view returns (uint256, uint256) {
+    function CalculateNotionalAndRate(uint position_id) public view returns (uint256, uint256) {
         uint256 notional_amount = 0;
         uint256 rate = 0;
         uint num_data = positions[position_id].num_data;
@@ -207,12 +208,16 @@ contract PositionManager {
             margin_to_go = margin_amount;
         }
         // margin to liquidator
-        pool.TransferAsset(liquidator, margin_to_go);
+        // pool.TransferAsset(liquidator, margin_to_go);
+        uint256 bonus_margin = pool.TransferMarginBonus(notional_amount);
+
         // margin to trader
         pool.TransferAsset(positions[position_id].trader_address, margin_amount - margin_to_go);
 
         // transfer position
         positions[position_id].trader_address = liquidator;
+        positions[position_id].margin_amount = margin_to_go + bonus_margin;
+        positions[position_id].is_liquidable = false;
     }
 
     function LiquidateAllPosition() external {

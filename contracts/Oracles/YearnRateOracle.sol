@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.6;
 
 import "./BaseRateOracle.sol";
-import "../Interface/yearn/IYVault.sol";
+import "../Interface/Yearn/IYVault.sol";
 import "../Utils/WadRayMath.sol";
 
 contract YearnRateOracle is BaseRateOracle {

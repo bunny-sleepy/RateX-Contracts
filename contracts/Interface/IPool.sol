@@ -11,4 +11,5 @@ interface IPool {
     function oracle_address() external view returns (address);
 
     function TransferAsset(address trader, uint256 margin_amount) external;
+    function TransferMarginBonus(uint256 notional_amount) external returns (uint256);
 }

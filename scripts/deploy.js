@@ -12,8 +12,13 @@ async function main() {
     let USDC = await MockERC20.deploy("USDC", "USDC", 18);
     await USDC.deployed();
 
+    // TODO: MockOracle
+    const MockOracle = await hre.ethers.getContractFactory("MockOracle");
+    let oracle = await MockOracle.deploy(USDC.address, 3600);
+    await oracle.deployed();
+
     const BasePool = await hre.ethers.getContractFactory("BasePool");
-    let pool = await BasePool.deploy(USDC.address);
+    let pool = await BasePool.deploy(USDC.address, oracle.address);
     await pool.deployed();
 
     let position_manager_address = await pool.position_manager_address();
@@ -25,6 +30,7 @@ async function main() {
     console.log("Pool address: ", pool.address);
     console.log("PositionManager address: ", position_manager.address);
     console.log("InsufanceFund address: ", insurance_fund.address);
+    console.log("Oracle address: ", oracle.address);
     console.log("USDC address: ", USDC.address);
     
     // TEST ONLY

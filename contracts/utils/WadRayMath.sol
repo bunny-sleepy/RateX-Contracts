@@ -2,7 +2,7 @@
 
 // solhint-disable const-name-snakecase
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.6;
 
 /**
  * @title WadRayMath library
