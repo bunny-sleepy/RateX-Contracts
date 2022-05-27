@@ -59,6 +59,48 @@ contract PositionManager {
         is_liquidable = positions[position_id].is_liquidable;
     }
 
+    function GetTraderPositionNumber(address trader_address) public view returns (uint) {
+        uint position_number = 0;
+        for (uint i = 0; i < num_positions; i++) {
+            if (position_valid[i] == true) {
+                if (positions[i].trader_address == trader_address) {
+                    position_number++;
+                }
+            }
+        }
+        return position_number;
+    }
+
+    function GetTraderPosition(
+        address trader_address,
+        uint position_id
+    ) external view returns (
+        uint256 swap_rate,
+        uint256 notional_amount,
+        uint256 margin_amount,
+        bool is_fixed_receiver,
+        bool is_liquidable,
+        uint256 health_factor
+    ) {
+        uint position_number = GetTraderPositionNumber(trader_address);
+        require(position_id < position_number, "position id exceeds");
+        position_number = position_id;
+        for (uint i = 0; i < num_positions; i++) {
+            if (position_valid[i] == true) {
+                if (positions[i].trader_address == trader_address) {
+                    if (position_number == 0) {
+                        (notional_amount, swap_rate) = CalculateNotionalAndRate(position_id);
+                        margin_amount = positions[i].margin_amount;
+                        is_fixed_receiver = positions[i].is_fixed_receiver;
+                        is_liquidable = positions[i].is_liquidable;
+                        health_factor = GetPositionHealthFactor(i);
+                        return (swap_rate, notional_amount, margin_amount, is_fixed_receiver, is_liquidable, health_factor);
+                    }
+                }
+            }
+        }
+    }
+
     function GetPositionTimeData(uint position_id, uint data_id) external view PositionValid(position_id) returns (uint256 notional_amount, uint256 trading_time, uint256 swap_rate) {
         uint num_data = positions[position_id].num_data;
         require(num_data > data_id, "Data ID invalid");
@@ -67,17 +109,24 @@ contract PositionManager {
         swap_rate = positions[position_id].data[data_id].swap_rate;
     }
 
-    function CalculatePnL(bool is_fixed_receiver, uint256 notional_amount, uint256 rate) internal view returns (int256 PnL) {
+    function CalculatePnL(uint position_id) public view PositionValid(position_id) returns (int256 PnL) {
         IPool pool = IPool(pool_address);
+        IRateOracle oracle = IRateOracle(pool.oracle_address());
         uint256 time = block.timestamp;
         if (time > pool.end_time()) {
             time = pool.end_time();
         }
-        uint256 avg_rate = IRateOracle(pool.oracle_address()).getRateFromTo(pool.start_time(), time);
-        if (is_fixed_receiver) {
-            PnL = (int256(rate) - int256(avg_rate)) * int256(notional_amount) / int256(RATE_PRECISION);
-        } else {
-            PnL = (int256(avg_rate) - int256(rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+        uint num_data = positions[position_id].num_data;
+        bool is_fixed_receiver = positions[position_id].is_fixed_receiver;
+        for (uint i = 0; i < num_data; i++) {
+            uint256 avg_rate = oracle.getRateFromTo(positions[position_id].data[i].trading_time, time);
+            uint256 rate = positions[position_id].data[i].swap_rate;
+            uint256 notional_amount = positions[position_id].data[i].notional_amount;
+            if (is_fixed_receiver) {
+                PnL += (int256(rate) - int256(avg_rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+            } else {
+                PnL += (int256(avg_rate) - int256(rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+            }
         }
     }
 
@@ -111,7 +160,7 @@ contract PositionManager {
         int256 PnL = 0;
         
         if (rate > 0) {
-            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+            PnL = CalculatePnL(position_id);
         }
 
         // margin_amount update
@@ -143,7 +192,8 @@ contract PositionManager {
         return flag;
     }
 
-    function ClosePosition(address trader_address, uint256 position_id) external {
+    function ClosePosition(address trader_address, uint256 position_id) external OnlyPool {
+        require(trader_address == positions[position_id].trader_address, "You are not trader");
         positions[position_id].is_liquidable = true;
     }
 
@@ -159,9 +209,9 @@ contract PositionManager {
         old_amount = positions[position_id].margin_amount;
         positions[position_id].margin_amount -= margin_amount;
         new_amount = positions[position_id].margin_amount;
+        require(GetPositionHealthFactor(position_id) >= PRICE_PRECISION, "Position Unhealthy");
         emit MarginUpdate(trader_address, position_id, old_amount, new_amount);
     }
-
 
     function LiquidatePosition(address liquidator, uint256 position_id) internal PositionValid(position_id) {
         // liquidate
@@ -177,7 +227,7 @@ contract PositionManager {
         // calculate PnL
         int256 PnL = 0;
         if (rate > 0) {
-            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+            PnL = CalculatePnL(position_id);
         }
         
         uint256 time_diff = pool.end_time() - block.timestamp;
@@ -242,7 +292,7 @@ contract PositionManager {
 
         int256 PnL = 0;
         if (rate > 0) {
-            PnL = CalculatePnL(positions[position_id].is_fixed_receiver, notional_amount, rate);
+            PnL = CalculatePnL(position_id);
         }
 
         // margin_amount update
@@ -255,6 +305,7 @@ contract PositionManager {
 
         // remove position after redeem
         delete positions[position_id];
+        delete position_valid[position_id];
     }
 
     function AddPosition(

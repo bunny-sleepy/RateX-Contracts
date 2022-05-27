@@ -32,7 +32,7 @@ async function main() {
     console.log("InsufanceFund address: ", insurance_fund.address);
     console.log("Oracle address: ", oracle.address);
     console.log("USDC address: ", USDC.address);
-    
+
     // TEST ONLY
     await USDC.approve(pool.address, parseUnits("1", 25));
 }

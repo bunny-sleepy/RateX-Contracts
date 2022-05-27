@@ -228,7 +228,6 @@ contract BasePool is ERC20Helper, Ownable {
             fixed_orders[rate].order_nodes[idx].order.is_position = true;
             fixed_orders[rate].order_nodes[idx].order.position_id = position_id;
         }
-        // TODO: transfer to position manager
     }
 
     function ListFixedLimitOrder(Order memory new_order) internal returns (uint idx) {
@@ -392,8 +391,6 @@ contract BasePool is ERC20Helper, Ownable {
 
                 for (uint i = 0; i < num_orders; i++) {
                     Order memory order = variable_orders[rate].order_nodes[idx].order;
-                    // uint256 order_notional_amount = order.notional_amount;
-                    // require(rate == order.swap_rate, "Swap rate error");
 
                     if (notional_amount_left <= order.notional_amount) {
                         position_swap_rate += notional_amount_left * rate;
@@ -506,8 +503,6 @@ contract BasePool is ERC20Helper, Ownable {
 
                 for (uint i = 0; i < num_orders; i++) {
                     Order memory order = fixed_orders[rate].order_nodes[idx].order;
-                    // uint256 order_notional_amount = order.notional_amount;
-                    // require(rate == order.swap_rate, "Swap rate error");
 
                     if (notional_amount_left <= order.notional_amount) {
                         position_swap_rate += notional_amount_left * rate;
@@ -640,6 +635,114 @@ contract BasePool is ERC20Helper, Ownable {
         return idx;
     }
 
+    function GetOrders(
+        uint256 swap_rate,
+        uint256 order_id,
+        bool is_fixed_receiver
+    ) external view returns (
+        Order memory order
+    ) {
+        if (is_fixed_receiver) {
+            require(fixed_orders[swap_rate].order_nodes[order_id].id == order_id, "Order id error");
+            order = fixed_orders[swap_rate].order_nodes[order_id].order;
+        } else {
+            require(variable_orders[swap_rate].order_nodes[order_id].id == order_id, "Order id error");
+            order = variable_orders[swap_rate].order_nodes[order_id].order;
+        }
+    }
+
+    function GetNumberOrdersInStep(
+        uint256 swap_rate,
+        bool is_fixed_receiver
+    ) external view returns (uint256 order_num) {
+        if (is_fixed_receiver) {
+            order_num = fixed_orders[swap_rate].num_orders;
+        } else {
+            order_num = variable_orders[swap_rate].num_orders;
+        }
+    }
+
+    function GetTraderOrderNumber(address trader_address) public view returns (uint) {
+        uint order_number = 0;
+        if (min_fixed_rate <= max_fixed_rate) {
+            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+                if (fixed_orders[rate].num_orders > 0) {
+                uint256 idx = fixed_orders[rate].begin;
+
+                    for (uint i = 0; i < fixed_orders[rate].num_orders; i++) {
+                        Order memory order = fixed_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            order_number++;
+                        }
+                        idx = fixed_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+
+        if (min_variable_rate <= max_variable_rate) {
+            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+                if (variable_orders[rate].num_orders > 0) {
+                    uint256 idx = variable_orders[rate].begin;
+
+                    for (uint i = 0; i < variable_orders[rate].num_orders; i++) {
+                        Order memory order = variable_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            order_number++;
+                        }
+                        idx = variable_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+        return order_number;
+    }
+
+    function GetTraderOrder(address trader_address, uint order_idx) external view returns (Order memory) {
+        uint256 order_number = GetTraderOrderNumber(trader_address);
+        require(order_number > order_idx, "order idx exceeds");
+        order_number = order_idx;
+        if (min_fixed_rate <= max_fixed_rate) {
+            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+                if (fixed_orders[rate].num_orders > 0) {
+                uint256 idx = fixed_orders[rate].begin;
+
+                    for (uint i = 0; i < fixed_orders[rate].num_orders; i++) {
+                        Order memory order = fixed_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            if (order_number == 0) {
+                                return order;
+                            }
+                            order_number -= 1;
+                        }
+                        idx = fixed_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+
+        if (min_variable_rate <= max_variable_rate) {
+            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+                if (variable_orders[rate].num_orders > 0) {
+                    uint256 idx = variable_orders[rate].begin;
+
+                    for (uint i = 0; i < variable_orders[rate].num_orders; i++) {
+                        Order memory order = variable_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            if (order_number == 0) {
+                                return order;
+                            }
+                            order_number -= 1;
+                        }
+                        idx = variable_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+        Order memory order_;
+        return order_;
+    }
+
     function UserUnlistLimitOrder(
         uint256 swap_rate,
         uint256 order_id,
@@ -663,6 +766,7 @@ contract BasePool is ERC20Helper, Ownable {
         }
         emit LimitOrderUnlisted(order_id, msg.sender, is_fixed_receiver, order.notional_amount, order.margin_amount, order.swap_rate);
     }
+
     // Orderbook
     event FixedMarketOrderFilled(uint position_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
     event FixedLimitOrderOpened(uint order_id, address trader_address, uint256 notional_amount, uint256 margin_amount, uint256 swap_rate);
