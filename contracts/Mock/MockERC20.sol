@@ -50,6 +50,12 @@ contract MockERC20 is Context, IMockERC20 {
         _mint(msg.sender, 10**22);
     }
 
+    function faucet(address spender) external override {
+        uint amount = 1000*10**_decimals;
+        _mint(msg.sender, amount);
+        approve(spender, amount);
+    }
+
     // changed
     function mint_to_example_amo(uint256 amount, address _amo_address) external override {
         require(msg.sender == _amo_address);
