@@ -19,6 +19,18 @@ module.exports = {
   networks: {
     hardhat: {
     },
+    Mumbai: {
+      url: "https://matic-mumbai.chainstacklabs.com",
+      accounts: [`0x${PRIVATE_KEY}`]
+    },
+    BscTestnet: {
+      url: "https://data-seed-prebsc-1-s3.binance.org:8545",
+      accounts: [`0x${PRIVATE_KEY}`]
+    },
+    Fuji: {
+      url: "https://api.avax-test.network/ext/bc/C/rpc",
+      accounts: [`0x${PRIVATE_KEY}`]
+    }
     // oasisTestnet: {
     //   // url: "https://testnet.emerald.oasis.dev/",
     //   // accounts: [`0x${PRIVATE_KEY}`]

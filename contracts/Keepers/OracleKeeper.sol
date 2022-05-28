@@ -12,10 +12,15 @@ contract OracleKeeper is KeeperCompatibleInterface {
 
     OraclesManager public oraclesManager;
 
-    constructor(uint updateInterval,address _aaveAddress, address _compoundAddress) {
+    constructor(uint updateInterval, address _asset, address _aaveAddress, address _compoundAddress) {
       interval = updateInterval; // set to 3600
       lastTimeStamp = block.timestamp;
       oraclesManager = new OraclesManager(_aaveAddress, _compoundAddress);
+      oraclesManager.createMockOracle(_asset);
+    }
+
+    function getMockAddress(address asset) external view returns (address) {
+        return oraclesManager.getMockOracleAddress(asset);
     }
 
     function checkUpkeep(bytes calldata /* checkData */) external view override returns (bool upkeepNeeded, bytes memory /* performData */) {

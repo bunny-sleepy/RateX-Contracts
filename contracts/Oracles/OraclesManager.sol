@@ -48,12 +48,16 @@ contract OraclesManager is Ownable {
     }
 
     // TODO：modifier onlyPool()
-    function createMockOracle(IERC20Minimal asset) public {
-        if(oracleTypeMap[4][address(asset)] == address(0)) {
-            oracleTypeMap[4][address(asset)] = address(new MockOracle(asset,3600));
-                oracleMap[totalOracles] = oracleTypeMap[4][address(asset)];
+    function createMockOracle(address asset) public {
+        if(oracleTypeMap[4][asset] == address(0)) {
+            oracleTypeMap[4][asset] = address(new MockOracle(IERC20Minimal(asset),3600));
+                oracleMap[totalOracles] = oracleTypeMap[4][asset];
                 totalOracles = totalOracles + 1;
         }
+    }
+
+    function getMockOracleAddress(address asset) external view returns (address) {
+        return address(oracleTypeMap[4][asset]);
     }
 
     function getRateFromTo(uint _oracleId, uint _from, uint _to) external view returns (uint) {
