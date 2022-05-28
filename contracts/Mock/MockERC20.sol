@@ -47,7 +47,7 @@ contract MockERC20 is Context, IMockERC20 {
         _name = name_;
         _symbol = symbol_;
         _decimals = decimals_;
-        _mint(msg.sender, 10**22);
+        _mint(msg.sender, 10**25);
     }
 
     // changed

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.6;
+pragma experimental ABIEncoderV2;
 
 import "../Utils/IERC20.sol";
 import "../Utils/ERC20Helper.sol";
@@ -596,7 +597,7 @@ contract BasePool is ERC20Helper, Ownable {
         uint256 margin_amount,
         uint256 notional_amount
     ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) returns (uint256) {
-        if (max_variable_rate > min_variable_rate) {
+        if (max_variable_rate >= min_variable_rate) {
             require(swap_rate > max_variable_rate, "Swap rate too low");
         }
         // Transfer margin to orderbook
@@ -618,7 +619,7 @@ contract BasePool is ERC20Helper, Ownable {
         uint256 margin_amount,
         uint256 notional_amount
     ) external NotPaused RateValid(swap_rate) OrderValid(margin_amount, notional_amount) returns (uint256) {
-        if (max_fixed_rate > min_fixed_rate) {
+        if (max_fixed_rate >= min_fixed_rate) {
             require(swap_rate < min_fixed_rate, "Swap rate too high");
         }
         // Transfer margin to orderbook
@@ -681,7 +682,7 @@ contract BasePool is ERC20Helper, Ownable {
         }
 
         if (min_variable_rate <= max_variable_rate) {
-            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+            for (uint rate = min_variable_rate; rate <= max_variable_rate; rate++) {
                 if (variable_orders[rate].num_orders > 0) {
                     uint256 idx = variable_orders[rate].begin;
 
@@ -698,7 +699,7 @@ contract BasePool is ERC20Helper, Ownable {
         return order_number;
     }
 
-    function GetTraderOrder(address trader_address, uint order_idx) external view returns (Order memory) {
+    function GetTraderOrder(address trader_address, uint order_idx) external view returns (Order memory, bool is_fixed_receiver) {
         uint256 order_number = GetTraderOrderNumber(trader_address);
         require(order_number > order_idx, "order idx exceeds");
         order_number = order_idx;
@@ -711,7 +712,8 @@ contract BasePool is ERC20Helper, Ownable {
                         Order memory order = fixed_orders[rate].order_nodes[idx].order;
                         if (order.trader_address == trader_address) {
                             if (order_number == 0) {
-                                return order;
+                                is_fixed_receiver = true;
+                                return (order, is_fixed_receiver);
                             }
                             order_number -= 1;
                         }
@@ -722,7 +724,7 @@ contract BasePool is ERC20Helper, Ownable {
         }
 
         if (min_variable_rate <= max_variable_rate) {
-            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+            for (uint rate = min_variable_rate; rate <= max_variable_rate; rate++) {
                 if (variable_orders[rate].num_orders > 0) {
                     uint256 idx = variable_orders[rate].begin;
 
@@ -730,7 +732,8 @@ contract BasePool is ERC20Helper, Ownable {
                         Order memory order = variable_orders[rate].order_nodes[idx].order;
                         if (order.trader_address == trader_address) {
                             if (order_number == 0) {
-                                return order;
+                                is_fixed_receiver = false;
+                                return (order, is_fixed_receiver);
                             }
                             order_number -= 1;
                         }
@@ -740,7 +743,56 @@ contract BasePool is ERC20Helper, Ownable {
             }
         }
         Order memory order_;
-        return order_;
+        return (order_, is_fixed_receiver);
+    }
+
+    function GetTraderOrderList(address trader_address) external view returns (Order[] memory, bool[] memory) {
+        uint256 order_number = GetTraderOrderNumber(trader_address);
+        Order[] memory orders = new Order[](order_number);
+        bool[] memory is_fixed_receiver = new bool[](order_number);
+        uint order_id = 0;
+        if (min_fixed_rate <= max_fixed_rate) {
+            for (uint rate = min_fixed_rate; rate <= max_fixed_rate; rate++) {
+                if (fixed_orders[rate].num_orders > 0) {
+                uint256 idx = fixed_orders[rate].begin;
+
+                    for (uint i = 0; i < fixed_orders[rate].num_orders; i++) {
+                        Order memory order = fixed_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            orders[order_id] = order;
+                            is_fixed_receiver[order_id] = true;
+                            order_id++;
+                        }
+                        idx = fixed_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+
+        if (min_variable_rate <= max_variable_rate) {
+            for (uint rate = min_variable_rate; rate <= max_variable_rate; rate++) {
+                if (variable_orders[rate].num_orders > 0) {
+                    uint256 idx = variable_orders[rate].begin;
+
+                    for (uint i = 0; i < variable_orders[rate].num_orders; i++) {
+                        Order memory order = variable_orders[rate].order_nodes[idx].order;
+                        if (order.trader_address == trader_address) {
+                            orders[order_id] = order;
+                            is_fixed_receiver[order_id] = false;
+                            order_id++;
+                        }
+                        idx = variable_orders[rate].order_nodes[idx].next;
+                    }
+                }
+            }
+        }
+        return (orders, is_fixed_receiver);
+    }
+
+    function GetTraderPositionList(address trader_address) external view returns (
+        IPositionManager.TraderPosition[] memory
+    ) {
+        return IPositionManager(position_manager_address).GetTraderPositionList(trader_address);
     }
 
     function UserUnlistLimitOrder(

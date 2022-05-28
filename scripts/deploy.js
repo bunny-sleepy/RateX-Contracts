@@ -35,6 +35,8 @@ async function main() {
 
     // TEST ONLY
     await USDC.approve(pool.address, parseUnits("1", 25));
+    await pool.FixedLimitOrder(150, parseUnits("1", 10), parseUnits("1", 11));
+    await pool.VariableMarketOrder(100, parseUnits("2", 10), parseUnits("1", 11));
 }
 
 // We recommend this pattern to be able to use async/await everywhere

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.6;
+pragma experimental ABIEncoderV2;
 
 import "./Interface/IPool.sol";
 import "./Interface/IRateOracle.sol";
@@ -71,34 +72,67 @@ contract PositionManager {
         return position_number;
     }
 
+    struct TraderPosition {
+        uint256 idx; // idx to get from positions[idx]
+        uint256 swap_rate;
+        uint256 notional_amount;
+        uint256 margin_amount;
+        bool is_fixed_receiver;
+        bool is_liquidable;
+        int256 PnL;
+        uint256 health_factor;
+    }
+
+    function GetTraderPositionList(address trader_address) external view returns (
+        TraderPosition[] memory
+    ) {
+        uint position_number = GetTraderPositionNumber(trader_address);
+        TraderPosition[] memory trader_position = new TraderPosition[](position_number);
+        uint256 position_id = 0;
+        for (uint i = 0; i < num_positions; i++) {
+            if (position_valid[i] == true) {
+                if (positions[i].trader_address == trader_address) {
+                    trader_position[position_id].idx = i;
+                    (trader_position[position_id].notional_amount, trader_position[position_id].swap_rate) = CalculateNotionalAndRate(position_id);
+                    trader_position[position_id].margin_amount = positions[i].margin_amount;
+                    trader_position[position_id].is_fixed_receiver = positions[i].is_fixed_receiver;
+                    trader_position[position_id].is_liquidable = positions[i].is_liquidable;
+                    trader_position[position_id].PnL = CalculatePnL(i);
+                    trader_position[position_id].health_factor = GetPositionHealthFactor(i);
+                    position_id++;
+                }
+            }
+        }
+        return trader_position;
+    }
+
     function GetTraderPosition(
         address trader_address,
         uint position_id
     ) external view returns (
-        uint256 swap_rate,
-        uint256 notional_amount,
-        uint256 margin_amount,
-        bool is_fixed_receiver,
-        bool is_liquidable,
-        uint256 health_factor
+        TraderPosition memory
     ) {
         uint position_number = GetTraderPositionNumber(trader_address);
         require(position_id < position_number, "position id exceeds");
         position_number = position_id;
+        TraderPosition memory trader_position;
         for (uint i = 0; i < num_positions; i++) {
             if (position_valid[i] == true) {
                 if (positions[i].trader_address == trader_address) {
                     if (position_number == 0) {
-                        (notional_amount, swap_rate) = CalculateNotionalAndRate(position_id);
-                        margin_amount = positions[i].margin_amount;
-                        is_fixed_receiver = positions[i].is_fixed_receiver;
-                        is_liquidable = positions[i].is_liquidable;
-                        health_factor = GetPositionHealthFactor(i);
-                        return (swap_rate, notional_amount, margin_amount, is_fixed_receiver, is_liquidable, health_factor);
+                        trader_position.idx = i;
+                        (trader_position.notional_amount, trader_position.swap_rate) = CalculateNotionalAndRate(position_id);
+                        trader_position.margin_amount = positions[i].margin_amount;
+                        trader_position.is_fixed_receiver = positions[i].is_fixed_receiver;
+                        trader_position.is_liquidable = positions[i].is_liquidable;
+                        trader_position.PnL = CalculatePnL(i);
+                        trader_position.health_factor = GetPositionHealthFactor(i);
+                        return trader_position;
                     }
                 }
             }
         }
+        return trader_position;
     }
 
     function GetPositionTimeData(uint position_id, uint data_id) external view PositionValid(position_id) returns (uint256 notional_amount, uint256 trading_time, uint256 swap_rate) {
@@ -110,6 +144,7 @@ contract PositionManager {
     }
 
     function CalculatePnL(uint position_id) public view PositionValid(position_id) returns (int256 PnL) {
+        PnL = 0;
         IPool pool = IPool(pool_address);
         IRateOracle oracle = IRateOracle(pool.oracle_address());
         uint256 time = block.timestamp;
@@ -122,10 +157,11 @@ contract PositionManager {
             uint256 avg_rate = oracle.getRateFromTo(positions[position_id].data[i].trading_time, time);
             uint256 rate = positions[position_id].data[i].swap_rate;
             uint256 notional_amount = positions[position_id].data[i].notional_amount;
+            uint256 elapsed_time = time - positions[position_id].data[i].trading_time;
             if (is_fixed_receiver) {
-                PnL += (int256(rate) - int256(avg_rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+                PnL += int256(int256(rate) - int256(avg_rate)) * int256(elapsed_time) * int256(notional_amount) / int256(RATE_PRECISION) / int256(365 * 86400);
             } else {
-                PnL += (int256(avg_rate) - int256(rate)) * int256(notional_amount) / int256(RATE_PRECISION);
+                PnL += int256(int256(avg_rate) - int256(rate)) * int256(elapsed_time) * int256(notional_amount) / int256(RATE_PRECISION) / int256(365 * 86400);
             }
         }
     }
